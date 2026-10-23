@@ -7,7 +7,6 @@
 class USphereComponent;
 class UStaticMeshComponent;
 class ATankPawn;
-class APlayerState; // Forward declaration
 
 UCLASS()
 class NETWORKTANKARENA_API ATankPickup : public AActor
@@ -38,7 +37,9 @@ protected:
 
 	virtual void OnPickedUp(ATankPawn* TankPawn);
 
-	// Multicast RPC to announce the pickup to all clients
 	UFUNCTION(NetMulticast, Reliable)
-	void Multicast_AnnouncePickup(APlayerState* CollectingPlayerState);
+	void Multicast_AnnouncePickup(ATankPawn* CollectingTank);
+
+private:
+	bool bIsCollected = false;
 };

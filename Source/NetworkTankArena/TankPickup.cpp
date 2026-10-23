@@ -5,90 +5,115 @@
 #include "GameFramework/PlayerState.h"
 #include "Kismet/GameplayStatics.h"
 #include "TankPawn.h"
+#include "TankPickupPopupWidget.h"
 
 ATankPickup::ATankPickup()
 {
-    PrimaryActorTick.bCanEverTick = false;
-    bReplicates = true;
-    NetUpdateFrequency = 10.f;
+	PrimaryActorTick.bCanEverTick = false;
+	bReplicates = true;
+	NetUpdateFrequency = 10.f;
 
-    CollisionComponent = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionComponent"));
-    SetRootComponent(CollisionComponent);
-    CollisionComponent->InitSphereRadius(75.f);
-    CollisionComponent->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
-    CollisionComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-    CollisionComponent->SetGenerateOverlapEvents(true);
+	CollisionComponent = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionComponent"));
+	SetRootComponent(CollisionComponent);
+	CollisionComponent->InitSphereRadius(75.f);
+	CollisionComponent->SetCollisionProfileName(TEXT("OverlapAllDynamic"));
+	CollisionComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	CollisionComponent->SetGenerateOverlapEvents(true);
 
-    MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
-    MeshComponent->SetupAttachment(CollisionComponent);
-    MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    MeshComponent->SetCanEverAffectNavigation(false);
+	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
+	MeshComponent->SetupAttachment(CollisionComponent);
+	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MeshComponent->SetCanEverAffectNavigation(false);
 }
 
 void ATankPickup::BeginPlay()
 {
-    Super::BeginPlay();
+	Super::BeginPlay();
 
-    if (HasAuthority())
-    {
-        CollisionComponent->OnComponentBeginOverlap.AddDynamic(this, &ATankPickup::OnOverlapBegin);
-    }
+	if (HasAuthority())
+	{
+		CollisionComponent->OnComponentBeginOverlap.AddDynamic(this, &ATankPickup::OnOverlapBegin);
+	}
 }
 
 void ATankPickup::OnOverlapBegin(
-    UPrimitiveComponent* OverlappedComponent, 
-    AActor* OtherActor, 
-    UPrimitiveComponent* OtherComp, 
-    int32 OtherBodyIndex, 
-    bool bFromSweep, 
-    const FHitResult& SweepResult)
+	UPrimitiveComponent* OverlappedComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	int32 OtherBodyIndex,
+	bool bFromSweep,
+	const FHitResult& SweepResult)
 {
-    if (!HasAuthority())
-    {
-        return;
-    }
+	if (!HasAuthority())
+	{
+		return;
+	}
 
-    if (ATankPawn* TankPawn = Cast<ATankPawn>(OtherActor))
-    {
-        APlayerState* CollectingPS = TankPawn->GetPlayerState();
+	if (bIsCollected)
+	{
+		return;
+	}
 
-        Multicast_AnnouncePickup(CollectingPS);
+	if (ATankPawn* TankPawn = Cast<ATankPawn>(OtherActor))
+	{
+		bIsCollected = true;
+		
+		CollisionComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		
+		Multicast_AnnouncePickup(TankPawn);
+		OnPickedUp(TankPawn);
 
-        OnPickedUp(TankPawn);
-        Destroy();
-    }
+		Destroy();
+	}
 }
 
 void ATankPickup::OnPickedUp(ATankPawn* TankPawn)
 {
-    // Reward can be added here
+	
 }
 
-void ATankPickup::Multicast_AnnouncePickup_Implementation(APlayerState* CollectingPlayerState)
+void ATankPickup::Multicast_AnnouncePickup_Implementation(
+	ATankPawn* CollectingTank)
 {
-    APlayerController* LocalPC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-    if (!LocalPC)
-    {
-        return;
-    }
+	if (!CollectingTank)
+	{
+		return;
+	}
 
-    FString Message;
-    
-    if (CollectingPlayerState && CollectingPlayerState == LocalPC->PlayerState)
-    {
-        Message = TEXT("You picked up the artifact!");
-    }
-    else
-    {
-        FString PlayerName = CollectingPlayerState ? CollectingPlayerState->GetPlayerName() : TEXT("An unknown player");
-        int32 PlayerId = CollectingPlayerState ? CollectingPlayerState->GetPlayerId() : -1;
+	FString Message;
 
-        Message = FString::Printf(TEXT("%s (ID: %d) picked up the artifact!"), *PlayerName, PlayerId);
-    }
-    
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, Message);
-    }
-    
+	APlayerController* LocalPC =
+		UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	if (LocalPC && LocalPC->GetPawn() == CollectingTank)
+	{
+		Message = TEXT("You picked up the artifact!");
+	}
+	else
+	{
+		FString PlayerName = TEXT("An unknown player");
+		int32 PlayerId = -1;
+
+		if (APlayerState* CollectingPS =
+			CollectingTank->GetPlayerState())
+		{
+			PlayerName = CollectingPS->GetPlayerName();
+			PlayerId = CollectingPS->GetPlayerId();
+		}
+
+		Message = FString::Printf(
+			TEXT("%s (ID: %d) picked up the artifact!"),
+			*PlayerName,
+			PlayerId
+		);
+	}
+
+	if (LocalPC)
+	{
+		if (UTankPickupPopupWidget* Popup =
+			CreateWidget<UTankPickupPopupWidget>(LocalPC))
+		{
+			Popup->AddToViewport(100);
+			Popup->ShowMessage(FText::FromString(Message));
+		}
+	}
 }
