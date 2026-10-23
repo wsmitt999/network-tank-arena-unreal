@@ -9,7 +9,7 @@ class UStaticMeshComponent;
 class ATankPawn;
 
 UCLASS()
-class NETWORKSTANKARENA_API ATankPickup : public AActor
+class NETWORKTANKARENA_API ATankPickup : public AActor
 {
 	GENERATED_BODY()
     
