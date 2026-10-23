@@ -7,6 +7,7 @@
 class USphereComponent;
 class UStaticMeshComponent;
 class ATankPawn;
+class APlayerState; // Forward declaration
 
 UCLASS()
 class NETWORKTANKARENA_API ATankPickup : public AActor
@@ -19,14 +20,12 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
-	// Overlap collision volume
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USphereComponent* CollisionComponent;
 
-	// Visual mesh 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UStaticMeshComponent* MeshComponent;
-	
+
 	UFUNCTION()
 	void OnOverlapBegin(
 		UPrimitiveComponent* OverlappedComponent, 
@@ -36,6 +35,10 @@ protected:
 		bool bFromSweep, 
 		const FHitResult& SweepResult
 	);
-	
+
 	virtual void OnPickedUp(ATankPawn* TankPawn);
+
+	// Multicast RPC to announce the pickup to all clients
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_AnnouncePickup(APlayerState* CollectingPlayerState);
 };
